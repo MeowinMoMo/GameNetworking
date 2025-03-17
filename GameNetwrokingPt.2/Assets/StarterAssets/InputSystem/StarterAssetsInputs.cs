@@ -74,7 +74,7 @@ namespace StarterAssets
 
         public void CrouchInput(bool newCrouchState)
         {
-            sprint = newCrouchState;
+            crouch = newCrouchState;
         }
 
         private void OnApplicationFocus(bool hasFocus)

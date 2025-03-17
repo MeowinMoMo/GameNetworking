@@ -232,7 +232,7 @@
                     "name": "",
                     "id": "45eb008b-1055-418c-913a-6da97408f746",
                     "path": "<Keyboard>/leftCtrl",
-                    "interactions": "",
+                    "interactions": "Hold",
                     "processors": "",
                     "groups": ";KeyboardMouse",
                     "action": "Crouch",

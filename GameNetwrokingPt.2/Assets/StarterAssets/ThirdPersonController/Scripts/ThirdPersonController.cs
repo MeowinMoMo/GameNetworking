@@ -21,6 +21,12 @@ namespace StarterAssets
         [Tooltip("Sprint speed of the character in m/s")]
         public float SprintSpeed = 5.335f;
 
+        [Tooltip("Crouch speed of the character in m/s")]
+        public float CrouchSpeed = 1.0f;
+
+        public float CrouchHeight = 0.9f; // Adjusted height when crouching
+        private float _originalHeight;
+
         [Tooltip("How fast the character turns to face movement direction")]
         [Range(0.0f, 0.3f)]
         public float RotationSmoothTime = 0.12f;
@@ -103,6 +109,7 @@ namespace StarterAssets
         private PlayerInput _playerInput;
 #endif
         private Animator _animator;
+        private bool _isCrouching = false;
         private CharacterController _controller;
         private StarterAssetsInputs _input;
         private GameObject _mainCamera;
@@ -160,6 +167,7 @@ namespace StarterAssets
             JumpAndGravity();
             GroundedCheck();
             Move();
+            HandleCrouch();
         }
 
         private void LateUpdate()
@@ -177,13 +185,32 @@ namespace StarterAssets
             _animIDCrouch = Animator.StringToHash("Crouch");
         }
 
+        private bool _crouchPressedLastFrame = false;
+
+        private void HandleCrouch()
+        {
+            if (_input.crouch)
+            {
+                if (!_isCrouching && Grounded)
+                {
+                    _isCrouching = true;
+                    _controller.height = CrouchHeight;
+                    _animator.SetBool(_animIDCrouch, true);
+                }
+            }
+            else if (_isCrouching)
+            {
+                _isCrouching = false;
+                _controller.height = _originalHeight;
+                _animator.SetBool(_animIDCrouch, false);
+            }
+        }
+
         private void GroundedCheck()
         {
             // set sphere position, with offset
-            Vector3 spherePosition = new Vector3(transform.position.x, transform.position.y - GroundedOffset,
-                transform.position.z);
-            Grounded = Physics.CheckSphere(spherePosition, GroundedRadius, GroundLayers,
-                QueryTriggerInteraction.Ignore);
+            Vector3 spherePosition = new Vector3(transform.position.x, transform.position.y - 0.1f, transform.position.z);
+            Grounded = Physics.CheckSphere(spherePosition, 0.3f, GroundLayers, QueryTriggerInteraction.Ignore);
 
             // update animator if using character
             if (_hasAnimator)
@@ -216,7 +243,7 @@ namespace StarterAssets
         private void Move()
         {
             // set target speed based on move speed, sprint speed and if sprint is pressed
-            float targetSpeed = _input.sprint ? SprintSpeed : MoveSpeed;
+            float targetSpeed = targetSpeed = _isCrouching ? CrouchSpeed : (_input.sprint ? SprintSpeed : MoveSpeed);
 
             // a simplistic acceleration and deceleration designed to be easy to remove, replace, or iterate upon
 
@@ -285,70 +312,54 @@ namespace StarterAssets
         {
             if (Grounded)
             {
-                // reset the fall timeout timer
+                // reset fall timeout
                 _fallTimeoutDelta = FallTimeout;
 
-                // update animator if using character
-                if (_hasAnimator)
+                if (_animator)
                 {
-                    _animator.SetBool(_animIDJump, false);
-                    _animator.SetBool(_animIDFreeFall, false);
+                    _animator.SetBool("Jump", false);
+                    _animator.SetBool("FreeFall", false); // Ensure FreeFall is off when grounded
                 }
 
-                // stop our velocity dropping infinitely when grounded
                 if (_verticalVelocity < 0.0f)
                 {
                     _verticalVelocity = -2f;
                 }
 
-                // Jump
-                if (_input.jump && _jumpTimeoutDelta <= 0.0f)
+                if (_input.jump && !_isCrouching) // Prevent jumping while crouching
                 {
-                    // the square root of H * -2 * G = how much velocity needed to reach desired height
                     _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
-
-                    // update animator if using character
-                    if (_hasAnimator)
+                    if (_animator)
                     {
-                        _animator.SetBool(_animIDJump, true);
+                        _animator.SetBool("Jump", true);
                     }
                 }
 
-                // jump timeout
-                if (_jumpTimeoutDelta >= 0.0f)
-                {
-                    _jumpTimeoutDelta -= Time.deltaTime;
-                }
+                _input.jump = false;
             }
             else
             {
-                // reset the jump timeout timer
-                _jumpTimeoutDelta = JumpTimeout;
-
-                // fall timeout
                 if (_fallTimeoutDelta >= 0.0f)
                 {
                     _fallTimeoutDelta -= Time.deltaTime;
                 }
-                else
+                else if (!_isCrouching) // Only enable FreeFall if not crouching
                 {
-                    // update animator if using character
-                    if (_hasAnimator)
+                    if (_animator)
                     {
-                        _animator.SetBool(_animIDFreeFall, true);
+                        _animator.SetBool("FreeFall", true);
                     }
                 }
 
-                // if we are not grounded, do not jump
                 _input.jump = false;
             }
 
-            // apply gravity over time if under terminal (multiply by delta time twice to linearly speed up over time)
             if (_verticalVelocity < _terminalVelocity)
             {
                 _verticalVelocity += Gravity * Time.deltaTime;
             }
         }
+
 
         private static float ClampAngle(float lfAngle, float lfMin, float lfMax)
         {
